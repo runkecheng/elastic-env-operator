@@ -11,7 +11,7 @@ COPY controllers/ controllers/
 COPY domain/ domain/
 # cache deps before building and copying source so that we don't need to re-download as much
 # and so that source changes don't invalidate our downloaded layer
-ENV GOPROXY="https://goproxy.cn,direct" CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on
+ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on
 RUN go mod download
 
 # Build
