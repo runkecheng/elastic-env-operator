@@ -18,7 +18,7 @@ all: manager
 
 # Run tests
 test: generate fmt vet manifests envtest
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test -race -covermode=atomic -v -coverpkg github.com/wosai/elastic-env-operator/domain/handler ./...
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test -covermode=atomic -v -coverpkg github.com/wosai/elastic-env-operator/domain/handler ./...
 
 # Build manager binary
 manager: generate fmt vet manifests
