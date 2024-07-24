@@ -24,7 +24,7 @@ jobs:
         make check
     - name: Test
       run: |
-        go test -race -covermode=atomic -v -coverpkg github.com/wosai/elastic-env-operator/domain/handler ./...
+        make test
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v3
     - name: Set up Docker Buildx
