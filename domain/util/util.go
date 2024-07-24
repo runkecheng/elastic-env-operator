@@ -7,19 +7,26 @@ import (
 	"strings"
 )
 
-//
 func MergeStringMap(base, toMerge map[string]string) map[string]string {
-	result := make(map[string]string)
-	for k, v := range base {
-		result[k] = v
-	}
-	for k, v := range toMerge {
-		result[k] = v
-	}
-	return result
+	return MergeLabelsWithFilter(base, toMerge, func(string) bool { return true })
 }
 
-//
+func MergeLabelsWithFilter(base, toMerge map[string]string, keyFilter func(string) bool) map[string]string {
+	result := make(map[string]string)
+	for k, v := range base {
+		if keyFilter(k) {
+			result[k] = v
+		}
+	}
+	for k, v := range toMerge {
+		if keyFilter(k) {
+			result[k] = v
+		}
+	}
+	return result
+
+}
+
 func ContainString(list []string, item string) bool {
 	for _, i := range list {
 		if i == item {
@@ -29,7 +36,6 @@ func ContainString(list []string, item string) bool {
 	return false
 }
 
-//
 func GetDeleteCheckSum(name string) string {
 	salt := os.Getenv("MD5_SALT")
 	if salt == "" {

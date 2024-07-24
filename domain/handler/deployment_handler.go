@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"time"
+
 	"github.com/imdario/mergo"
-	qav1alpha1 "github.com/wosai/elastic-env-operator/api/v1alpha1"
-	"github.com/wosai/elastic-env-operator/domain/entity"
-	"github.com/wosai/elastic-env-operator/domain/util"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -18,7 +18,10 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"time"
+
+	qav1alpha1 "github.com/wosai/elastic-env-operator/api/v1alpha1"
+	"github.com/wosai/elastic-env-operator/domain/entity"
+	"github.com/wosai/elastic-env-operator/domain/util"
 )
 
 type deploymentHandler struct {
@@ -104,8 +107,17 @@ func (h *deploymentHandler) CreateOrUpdate() error {
 			},
 		}
 	}
-	deployment.Spec.Template.ObjectMeta.Labels = util.MergeStringMap(deployment.Labels,
-		deployment.Spec.Selector.MatchLabels)
+	// FIX: only merge simple labels
+	deployment.Spec.Template.ObjectMeta.Labels = util.MergeLabelsWithFilter(deployment.Labels,
+		deployment.Spec.Selector.MatchLabels, func(key string) bool {
+			if strings.HasPrefix(key, "rollouts.kruise.io/") {
+				return false
+			}
+			if strings.HasPrefix(key, "k8slens-") {
+				return false
+			}
+			return true
+		})
 	deployment.Spec.Template.Spec.Volumes = volumes
 	deployment.Spec.Template.Spec.HostAliases = deploy.HostAlias
 	containers := []corev1.Container{container}
