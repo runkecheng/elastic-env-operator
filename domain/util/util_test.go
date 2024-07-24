@@ -3,7 +3,7 @@ package util
 import (
 	"strings"
 	"testing"
-	
+
 	"gotest.tools/assert"
 )
 
