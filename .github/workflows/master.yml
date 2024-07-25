@@ -1,6 +1,7 @@
 name: Build and Test
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - master
@@ -15,8 +16,8 @@ on:
       - converted_to_draft
 
 jobs:
-  build:
-    name: Build and Test
+  unit_test:
+    name: Unit Test
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -31,9 +32,39 @@ jobs:
         export PATH=$PATH:$(go env GOPATH)/bin # temporary fix. See https://github.com/actions/setup-go/issues/14
         make build
         make check
-#    - name: Test
-#      run: |
-#        make test
+    - name: Test
+      run: |
+        make test
+
+  e2e:
+    name: E2E Test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.17'
+    - name: Build and Check
+      env:
+        GO111MODULE: on
+      run: |
+        export PATH=$PATH:$(go env GOPATH)/bin # temporary fix. See https://github.com/actions/setup-go/issues/14
+        make build
+        make check
+    - name: start minikube
+      id: minikube
+      uses: medyagh/setup-minikube@latest
+    - name: Test
+      run: |
+        make e2e
+
+  build:
+    needs: [unit_test, e2e]
+    name: Build and Test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4    
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v3
     - name: Set up Docker Buildx

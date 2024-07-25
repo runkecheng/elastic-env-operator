@@ -17,22 +17,23 @@ limitations under the License.
 package controllers
 
 import (
-	"context"
+	// "context"
+	"path/filepath"
+	"testing"
+	"time"
+
 	"github.com/go-logr/zapr"
-	"github.com/gogo/protobuf/proto"
 	"github.com/wosai/elastic-env-operator/domain/entity"
 	"github.com/wosai/elastic-env-operator/domain/handler"
 	"go.uber.org/zap"
 	istio "istio.io/client-go/pkg/apis/networking/v1beta1"
-	"path/filepath"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"testing"
-	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
@@ -40,9 +41,7 @@ import (
 
 	qav1alpha1 "github.com/wosai/elastic-env-operator/api/v1alpha1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
-	v1beta13 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	// metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -66,7 +65,8 @@ var _ = BeforeSuite(func(done Done) {
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths: []string{filepath.Join("..", "config", "crd", "bases")},
+		CRDDirectoryPaths:  []string{filepath.Join("..", "config", "crd", "bases")},
+		UseExistingCluster: pointer.BoolPtr(true),
 	}
 
 	var err error
@@ -80,7 +80,7 @@ var _ = BeforeSuite(func(done Done) {
 	Expect(err).NotTo(HaveOccurred())
 	err = istio.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
-	err = v1beta1.AddToScheme(scheme.Scheme)
+	err = v1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 	err = v1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
@@ -137,55 +137,12 @@ var _ = BeforeSuite(func(done Done) {
 	k8sClient = mgr.GetClient()
 	Expect(k8sClient).ToNot(BeNil())
 
-	virtualServiceCRD := &v1beta13.CustomResourceDefinition{
-		ObjectMeta: metav1.ObjectMeta{Name: "virtualservices.networking.istio.io"},
-		Spec: v1beta13.CustomResourceDefinitionSpec{
-			Group: "networking.istio.io",
-			Names: v1beta13.CustomResourceDefinitionNames{
-				Plural: "virtualservices",
-				Kind:   "VirtualService",
-			},
-			Scope:                 "Namespaced",
-			PreserveUnknownFields: proto.Bool(true),
-			Versions: []v1beta13.CustomResourceDefinitionVersion{
-				{
-					Name:    "v1beta1",
-					Served:  true,
-					Storage: true,
-				},
-			},
-		},
-	}
-	err = k8sClient.Create(context.Background(), virtualServiceCRD)
-	Expect(err).NotTo(HaveOccurred())
-
-	destinationRuleCRD := &v1beta13.CustomResourceDefinition{
-		ObjectMeta: metav1.ObjectMeta{Name: "destinationrules.networking.istio.io"},
-		Spec: v1beta13.CustomResourceDefinitionSpec{
-			Group: "networking.istio.io",
-			Names: v1beta13.CustomResourceDefinitionNames{
-				Plural: "destinationrules",
-				Kind:   "DestinationRule",
-			},
-			Scope: "Namespaced",
-			Versions: []v1beta13.CustomResourceDefinitionVersion{
-				{
-					Name:    "v1beta1",
-					Served:  true,
-					Storage: true,
-				},
-			},
-		},
-	}
-	err = k8sClient.Create(context.Background(), destinationRuleCRD)
-	Expect(err).NotTo(HaveOccurred())
-
 	time.Sleep(time.Second * 2)
 
 	entity.ConfigMapData.FromMap(map[string]string{
 		"ingressOpen":                  "true",
 		"istioInject":                  "true",
-		"istioEnable":                  "true",
+		"istioEnable":                  "false",
 		"domainPostfix":                `{"nginx-vpc":"*.beta.iwosai.com","nginx":"*.iwosai.com"}`,
 		"istioGateways":                `["istio-system/ingressgateway","mesh"]`,
 		"specialVirtualServiceIngress": "nginx",
