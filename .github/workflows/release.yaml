@@ -38,3 +38,14 @@ jobs:
             ghcr.io/shouqianba-ft/elastic-env-operator:${{ github.event.release.tag_name }}
           platforms: linux/amd64
           labels: ${{ steps.meta.outputs.labels }}
+      - name: Combine CRD YAML files
+        run: |
+          mkdir -p combined_crd
+          cat config/crd/base/*.yaml > combined_crd/combined_crd.yaml
+      - name: Upload CRD
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.get_release.outputs.upload_url }}
+          asset_path: combined_crd/combined_crd.yaml
+          asset_name: crd.yaml
+          asset_content_type: application/yaml
