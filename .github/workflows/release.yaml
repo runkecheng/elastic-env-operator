@@ -5,8 +5,8 @@ on:
       - created
 
 jobs:
-  release:
-    name: Release on GitHub
+  build:
+    name: Build image
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -38,3 +38,28 @@ jobs:
             ghcr.io/shouqianba-ft/elastic-env-operator:${{ github.event.release.tag_name }}
           platforms: linux/amd64
           labels: ${{ steps.meta.outputs.labels }}
+
+  upload:
+    name: Upload CRD
+    runs-on: ubuntu-latest
+    steps: 
+    - name: Checkout code
+      uses: actions/checkout@v4    
+    - name: Get release
+      id: get_release
+      uses: bruceadams/get-release@v1.3.2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}     
+    - name: Combine CRD YAML files
+      run: |
+        mkdir -p combined_crd
+        cat config/crd/bases/*.yaml > combined_crd/combined_crd.yaml
+    - name: Upload CRD
+      uses: actions/upload-release-asset@v1.0.2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}     
+      with:
+        upload_url: ${{ steps.get_release.outputs.upload_url }}
+        asset_path: combined_crd/combined_crd.yaml
+        asset_name: crd.yaml
+        asset_content_type: application/yaml
