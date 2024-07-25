@@ -15,25 +15,57 @@ on:
       - converted_to_draft
 
 jobs:
-  build:
-    name: Build and Test
+  check:
+    name: Build and Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+      - name: Build and Check
+        env:
+          GO111MODULE: on
+        run: |
+          export PATH=$PATH:$(go env GOPATH)/bin # temporary fix. See https://github.com/actions/setup-go/issues/14
+          make build
+          make check
+
+  unit_test:
+    needs: check
+    name: Unit Test
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.17'
-    - name: Build and Check
-      env:
-        GO111MODULE: on
+        go-version: '1.21'
+    - name: Test
       run: |
-        export PATH=$PATH:$(go env GOPATH)/bin # temporary fix. See https://github.com/actions/setup-go/issues/14
-        make build
-        make check
-#    - name: Test
-#      run: |
-#        make test
+        make test
+
+  integration:
+    needs: check
+    name: Integration Test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+    - name: Test
+      run: |
+        make integration
+
+  build_image:
+    needs: [unit_test, integration]
+    name: Build Image
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4    
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v3
     - name: Set up Docker Buildx

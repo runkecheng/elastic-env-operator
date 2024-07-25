@@ -20,6 +20,9 @@ all: manager
 test: generate fmt vet manifests envtest
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /controllers) -coverprofile cover.out
 
+integration: generate fmt vet manifests envtest
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test -timeout 300s -run ^TestAPIs $$(go list ./... | grep /controllers) -v
+
 # Build manager binary
 manager: generate fmt vet manifests
 	CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} go build -o bin/manager main.go
