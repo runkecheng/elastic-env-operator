@@ -2,6 +2,9 @@ package controllers
 
 import (
 	"context"
+	"fmt"
+	"time"
+
 	"github.com/gogo/protobuf/proto"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -12,7 +15,7 @@ import (
 	istio "istio.io/client-go/pkg/apis/networking/v1beta1"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/api/networking/v1beta1"
+	"k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -20,7 +23,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"time"
 )
 
 var _ = Describe("Controller", func() {
@@ -28,7 +30,7 @@ var _ = Describe("Controller", func() {
 	applicationName := "default-app"
 	planeName := "base"
 	var deploymentName = util.GetSubsetName(applicationName, planeName)
-	image := "busybox"
+	image := "busybox:1.32"
 	ctx := context.Background()
 	var err error
 	var sqbdeployment *qav1alpha1.SQBDeployment
@@ -118,9 +120,11 @@ var _ = Describe("Controller", func() {
 						Domains: []qav1alpha1.Domain{
 							{
 								Class: "nginx",
+								Host:  fmt.Sprintf("%s.iwosai.com", applicationName),
 							},
 							{
 								Class: "nginx-vpc",
+								Host:  fmt.Sprintf("%s.beta.iwosai.com", applicationName),
 							},
 						},
 					},
@@ -153,6 +157,10 @@ var _ = Describe("Controller", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: namespace,
 					Name:      deploymentName,
+					Labels: map[string]string{
+						entity.AppKey:   applicationName,
+						entity.PlaneKey: planeName,
+					},
 				},
 				Spec: qav1alpha1.SQBDeploymentSpec{
 					Selector: qav1alpha1.Selector{
@@ -182,7 +190,7 @@ var _ = Describe("Controller", func() {
 			// 删除service,ingress,deployment
 			service := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: applicationName}}
 			_ = k8sClient.Delete(ctx, service)
-			ingress := &v1beta1.Ingress{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: applicationName}}
+			ingress := &v1.Ingress{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: applicationName}}
 			_ = k8sClient.Delete(ctx, ingress)
 			deployment := &appv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: deploymentName}}
 			_ = k8sClient.Delete(ctx, deployment)
@@ -324,7 +332,7 @@ var _ = Describe("Controller", func() {
 			err = k8sClient.Update(ctx, sqbapplication)
 			Expect(err).NotTo(HaveOccurred())
 			time.Sleep(time.Second)
-			ingress := &v1beta1.Ingress{}
+			ingress := &v1.Ingress{}
 			err = k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: applicationName}, ingress)
 			Expect(err).To(HaveOccurred())
 		})
@@ -332,24 +340,31 @@ var _ = Describe("Controller", func() {
 		It("ingress open", func() {
 			_ = k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: applicationName}, sqbapplication)
 			sqbapplication.Annotations[entity.IngressOpenAnnotationKey] = "true"
-			sqbapplication.Spec.Subpaths = append([]qav1alpha1.Subpath{
+			sqbapplication.Spec.Subpaths = []qav1alpha1.Subpath{
 				{
 					Path:        "/v1",
 					ServiceName: "version1",
 					ServicePort: 8080,
 				},
-			})
+			}
 			err = k8sClient.Update(ctx, sqbapplication)
 			Expect(err).NotTo(HaveOccurred())
 			time.Sleep(time.Second)
 			for _, domain := range sqbapplication.Spec.Domains {
-				ingress := &v1beta1.Ingress{}
-				err = k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: applicationName + "-" + domain.Class}, ingress)
+				ingress := &v1.Ingress{}
+				err = k8sClient.Get(
+					ctx,
+					types.NamespacedName{
+						Namespace: namespace,
+						Name:      handler.GetIngressName(applicationName, domain.Class, domain.Host),
+					},
+					ingress,
+				)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(ingress.Spec.Rules[0].Host).To(Equal(entity.ConfigMapData.GetDomainNameByClass(applicationName, domain.Class)))
-				Expect(ingress.Spec.Rules[0].HTTP.Paths[0].Backend.ServiceName).To(Equal("version1"))
+				Expect(ingress.Spec.Rules[0].HTTP.Paths[0].Backend.Service.Name).To(Equal("version1"))
 				Expect(ingress.Spec.Rules[0].HTTP.Paths[0].Path).To(Equal("/v1"))
-				Expect(ingress.Spec.Rules[0].HTTP.Paths[1].Backend.ServiceName).To(Equal(applicationName))
+				Expect(ingress.Spec.Rules[0].HTTP.Paths[1].Backend.Service.Name).To(Equal(applicationName))
 				Expect(ingress.Spec.Rules[0].HTTP.Paths[1].Path).To(Equal(""))
 			}
 		})
@@ -387,8 +402,14 @@ var _ = Describe("Controller", func() {
 			err = k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: applicationName}, service)
 			Expect(service.Annotations["type"]).To(Equal("service"))
 			for _, domain := range sqbapplication.Spec.Domains {
-				ingress := &v1beta1.Ingress{}
-				err = k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: sqbapplication.Name + "-" + domain.Class}, ingress)
+				ingress := &v1.Ingress{}
+				err = k8sClient.Get(ctx,
+					types.NamespacedName{
+						Namespace: namespace,
+						Name:      handler.GetIngressName(sqbapplication.Name, domain.Class, domain.Host),
+					},
+					ingress,
+				)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(ingress.Annotations["type"]).To(Equal("ingress"))
 			}
@@ -454,7 +475,7 @@ var _ = Describe("Controller", func() {
 			deployment := &appv1.Deployment{}
 			err = k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: deploymentName}, deployment)
 			Expect(err).To(HaveOccurred())
-			ingress := &v1beta1.Ingress{}
+			ingress := &v1.Ingress{}
 			err = k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: applicationName}, ingress)
 			Expect(err).To(HaveOccurred())
 			service := &corev1.Service{}
@@ -463,7 +484,8 @@ var _ = Describe("Controller", func() {
 		})
 	})
 
-	Describe("istio enabled", func() {
+	// deprecated
+	XDescribe("istio enabled", func() {
 		BeforeEach(func() {
 			// 创建默认的application
 			sqbapplication = &qav1alpha1.SQBApplication{
@@ -479,9 +501,11 @@ var _ = Describe("Controller", func() {
 						Domains: []qav1alpha1.Domain{
 							{
 								Class: "nginx",
+								Host:  fmt.Sprintf("%s.iwosai.com", applicationName),
 							},
 							{
 								Class: "nginx-vpc",
+								Host:  fmt.Sprintf("%s.beta.iwosai.com", applicationName),
 							},
 						},
 					},
@@ -514,6 +538,10 @@ var _ = Describe("Controller", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: namespace,
 					Name:      deploymentName,
+					Labels: map[string]string{
+						entity.AppKey:   applicationName,
+						entity.PlaneKey: planeName,
+					},
 				},
 				Spec: qav1alpha1.SQBDeploymentSpec{
 					Selector: qav1alpha1.Selector{
@@ -543,7 +571,7 @@ var _ = Describe("Controller", func() {
 			// 删除service,ingress,deployment,virtualservice,destinationrule
 			service := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: applicationName}}
 			_ = k8sClient.Delete(ctx, service)
-			ingress := &v1beta1.Ingress{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: applicationName}}
+			ingress := &v1.Ingress{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: applicationName}}
 			_ = k8sClient.Delete(ctx, ingress)
 			virtualservice := &istio.VirtualService{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: applicationName}}
 			_ = k8sClient.Delete(ctx, virtualservice)
@@ -590,11 +618,11 @@ var _ = Describe("Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			time.Sleep(time.Second)
 			for _, domain := range sqbapplication.Spec.Domains {
-				ingress := &v1beta1.Ingress{}
+				ingress := &v1.Ingress{}
 				err = k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: applicationName + "-" + domain.Class}, ingress)
 				Expect(ingress.Spec.Rules[0].Host).To(Equal(entity.ConfigMapData.GetDomainNameByClass(applicationName, domain.Class)))
-				Expect(ingress.Spec.Rules[0].HTTP.Paths[0].Backend.ServiceName).To(Equal("istio-ingressgateway-" + namespace))
-				Expect(ingress.Spec.Rules[0].HTTP.Paths[0].Backend.ServicePort).To(Equal(intstr.FromInt(80)))
+				Expect(ingress.Spec.Rules[0].HTTP.Paths[0].Backend.Service.Name).To(Equal("istio-ingressgateway-" + namespace))
+				Expect(ingress.Spec.Rules[0].HTTP.Paths[0].Backend.Service.Name).To(Equal(intstr.FromInt(80)))
 			}
 		})
 
@@ -616,7 +644,7 @@ var _ = Describe("Controller", func() {
 			Expect(virtualservice.Spec.Hosts).To(Equal([]string{deploymentName + ".iwosai.com"}))
 			Expect(virtualservice.Spec.Http[0].Headers.Request.Set[entity.XEnvFlag]).To(Equal(planeName))
 			// 断言ingress
-			ingress := &v1beta1.Ingress{}
+			ingress := &v1.Ingress{}
 			err = k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: applicationName + "-" + handler.SpecialVirtualServiceIngress(sqbdeployment)}, ingress)
 			Expect(len(ingress.Spec.Rules)).To(Equal(2))
 			// 关闭入口

@@ -1,6 +1,6 @@
 module github.com/wosai/elastic-env-operator
 
-go 1.17
+go 1.21
 
 require (
 	github.com/VictoriaMetrics/operator v0.7.1
@@ -21,6 +21,7 @@ require (
 	k8s.io/apiextensions-apiserver v0.20.11
 	k8s.io/apimachinery v0.20.11
 	k8s.io/client-go v12.0.0+incompatible
+	k8s.io/utils v0.0.0-20210111153108-fddb29f9d009
 	sigs.k8s.io/controller-runtime v0.8.3
 )
 
@@ -71,7 +72,6 @@ require (
 	k8s.io/component-base v0.20.11 // indirect
 	k8s.io/klog/v2 v2.4.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20201113171705-d219536bb9fd // indirect
-	k8s.io/utils v0.0.0-20210111153108-fddb29f9d009 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.1.2 // indirect
 	sigs.k8s.io/yaml v1.2.0 // indirect
 )
