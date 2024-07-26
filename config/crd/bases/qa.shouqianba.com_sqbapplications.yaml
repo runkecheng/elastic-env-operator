@@ -1,10 +1,9 @@
-
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.3.0
+    controller-gen.kubebuilder.io/version: v0.10.0
   creationTimestamp: null
   name: sqbapplications.qa.shouqianba.com
 spec:
@@ -99,7 +98,7 @@ spec:
                           type: object
                         fieldRef:
                           description: 'Selects a field of the pod: supports metadata.name,
-                            metadata.namespace, metadata.labels, metadata.annotations,
+                            metadata.namespace, `metadata.labels[''<KEY>'']`, `metadata.annotations[''<KEY>'']`,
                             spec.nodeName, spec.serviceAccountName, status.hostIP,
                             status.podIP, status.podIPs.'
                           properties:
@@ -575,7 +574,8 @@ spec:
                         are reserved for IANA standard service names (as per RFC-6335
                         and http://www.iana.org/assignments/service-names). Non-standard
                         protocols should use prefixed names such as mycompany.com/my-custom-protocol.
-                        Field can be enabled with ServiceAppProtocol feature gate.
+                        This is a beta field that is guarded by the ServiceAppProtocol
+                        feature gate and enabled by default.
                       type: string
                     name:
                       description: The name of this port within the service. This
@@ -586,11 +586,14 @@ spec:
                       type: string
                     nodePort:
                       description: 'The port on each node on which this service is
-                        exposed when type=NodePort or LoadBalancer. Usually assigned
-                        by the system. If specified, it will be allocated to the service
-                        if unused or else creation of the service will fail. Default
-                        is to auto-allocate a port if the ServiceType of this Service
-                        requires one. More info: https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport'
+                        exposed when type is NodePort or LoadBalancer.  Usually assigned
+                        by the system. If a value is specified, in-range, and not
+                        in use it will be used, otherwise the operation will fail.  If
+                        not specified, a port will be allocated if this Service requires
+                        one.  If this field is specified when creating a Service which
+                        does not need it, creation will fail. This field will be wiped
+                        when updating a Service to no longer need it (e.g. changing
+                        type from NodePort to ClusterIP). More info: https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport'
                       format: int32
                       type: integer
                     port:
@@ -598,6 +601,7 @@ spec:
                       format: int32
                       type: integer
                     protocol:
+                      default: TCP
                       description: The IP protocol for this port. Supports "TCP",
                         "UDP", and "SCTP". Default is TCP.
                       type: string
@@ -718,9 +722,3 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []
