@@ -3,10 +3,11 @@ package handler
 import (
 	"context"
 	"fmt"
+
 	qav1alpha1 "github.com/wosai/elastic-env-operator/api/v1alpha1"
 	"github.com/wosai/elastic-env-operator/domain/entity"
 	"github.com/wosai/elastic-env-operator/domain/util"
-	"k8s.io/api/networking/v1"
+	v1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -38,7 +39,7 @@ func (h *ingressHandler) CreateOrUpdateForSqbapplication() error {
 		ingress := &v1.Ingress{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: h.sqbapplication.Namespace,
-				Name:      getIngressName(h.sqbapplication.Name, domain.Class, domain.Host),
+				Name:      GetIngressName(h.sqbapplication.Name, domain.Class, domain.Host),
 			},
 		}
 		ingressNames[i] = ingress.Name
@@ -148,7 +149,7 @@ func (h *ingressHandler) CreateOrUpdateForSqbapplication() error {
 		if sqbdeployment.GetAnnotations()[entity.PublicEntryAnnotationKey] == "true" {
 			ingressClass := SpecialVirtualServiceIngress(&sqbdeployment)
 			host := entity.ConfigMapData.GetDomainNameByClass(sqbdeployment.Name, ingressClass)
-			name := getIngressName(h.sqbapplication.Name, ingressClass, host)
+			name := GetIngressName(h.sqbapplication.Name, ingressClass, host)
 			ingressNames = append(ingressNames, name)
 		}
 	}
@@ -171,7 +172,7 @@ func (h *ingressHandler) CreateOrUpdateForSqbdeployment() error {
 	ingress := &v1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: h.sqbdeployment.Namespace,
-			Name:      getIngressName(h.sqbdeployment.Labels[entity.AppKey], ingressClass, host),
+			Name:      GetIngressName(h.sqbdeployment.Labels[entity.AppKey], ingressClass, host),
 			Annotations: map[string]string{
 				"kubernetes.io/ingress.class":                ingressClass,
 				"nginx.ingress.kubernetes.io/server-snippet": "location ~ ^/metrics {deny all;return 404;}",
@@ -230,7 +231,7 @@ func (h *ingressHandler) DeleteForSqbdeployment() error {
 	host := entity.ConfigMapData.GetDomainNameByClass(h.sqbdeployment.Name, ingressClass)
 	ingress := &v1.Ingress{ObjectMeta: metav1.ObjectMeta{
 		Namespace: h.sqbdeployment.Namespace,
-		Name:      getIngressName(h.sqbdeployment.Labels[entity.AppKey], ingressClass, host),
+		Name:      GetIngressName(h.sqbdeployment.Labels[entity.AppKey], ingressClass, host),
 	}}
 	err := k8sclient.Get(h.ctx, client.ObjectKey{Namespace: ingress.Namespace, Name: ingress.Name}, ingress)
 	if err != nil {
@@ -264,8 +265,8 @@ func (h *ingressHandler) Handle() error {
 	return nil
 }
 
-// getIngressName, 生成ingress的名称
-func getIngressName(appName, nginxClass, host string) string {
+// GetIngressName, 生成ingress的名称
+func GetIngressName(appName, nginxClass, host string) string {
 	return fmt.Sprintf("%s.%s.%s", appName, nginxClass, host)
 }
 
@@ -275,7 +276,7 @@ func (h *ingressHandler) isAutoIngress(ingress v1.Ingress) bool {
 		return false
 	}
 	// 新规则
-	if getIngressName(h.sqbapplication.Name, ingress.Annotations[entity.IngressClassAnnotationKey],
+	if GetIngressName(h.sqbapplication.Name, ingress.Annotations[entity.IngressClassAnnotationKey],
 		ingress.Spec.Rules[0].Host) == ingress.Name {
 		return true
 	}

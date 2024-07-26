@@ -42,6 +42,9 @@ func TestGeneratePlaneHttpRoute(t *testing.T) {
 func TestGenerateBaseHttpRoute(t *testing.T) {
 	host := "host1"
 	path := "/v1"
+	entity.ConfigMapData.FromMap(map[string]string{
+		"baseFlag": "base",
+	})
 	route := generateBaseHttpRoute(host, path)
 	assert.Equal(t, len(route.Route), 1)
 	assert.Equal(t, route.Route[0].Destination.Host, host)
