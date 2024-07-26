@@ -367,7 +367,7 @@ func (h *deploymentHandler) addStartupProbe(deployment *appv1.Deployment) {
 			SuccessThreshold:    1,
 			FailureThreshold:    initialDelaySeconds / 10,
 			TimeoutSeconds:      deploy.HealthCheck.TimeoutSeconds,
-			Handler:             deploy.HealthCheck.Handler,
+			ProbeHandler:        deploy.HealthCheck.ProbeHandler,
 		}
 		deploy.HealthCheck.InitialDelaySeconds = 10
 		deployment.Spec.Template.Spec.Containers[0].LivenessProbe = deploy.HealthCheck
