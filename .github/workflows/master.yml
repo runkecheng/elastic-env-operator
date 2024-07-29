@@ -62,6 +62,9 @@ jobs:
 
   build_image:
     needs: [unit_test, integration]
+    permissions:
+      contents: read
+      packages: write
     name: Build Image
     runs-on: ubuntu-latest
     steps:
