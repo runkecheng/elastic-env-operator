@@ -2,10 +2,14 @@ package handler
 
 import (
 	"context"
-	qav1alpha1 "github.com/wosai/elastic-env-operator/api/v1alpha1"
-	"github.com/wosai/elastic-env-operator/domain/entity"
+
+	"k8s.io/client-go/tools/cache"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	qav1alpha1 "github.com/wosai/elastic-env-operator/api/v1alpha1"
+	"github.com/wosai/elastic-env-operator/domain/common"
+	"github.com/wosai/elastic-env-operator/domain/entity"
 )
 
 type sqbDeploymentHandler struct {
@@ -13,8 +17,11 @@ type sqbDeploymentHandler struct {
 	ctx context.Context
 }
 
-func NewSqbDeploymentHanlder(req ctrl.Request, ctx context.Context) *sqbDeploymentHandler {
-	return &sqbDeploymentHandler{req: req, ctx: ctx}
+func NewSqbDeploymentHandler(req ctrl.Request, ctx context.Context, indexer cache.Indexer) SQBReconciler {
+	return &sqbDeploymentHandler{
+		req: req,
+		ctx: context.WithValue(ctx, common.ContextKeyCronHPAIndexer, indexer),
+	}
 }
 
 func (h *sqbDeploymentHandler) GetInstance() (runtimeObj, error) {

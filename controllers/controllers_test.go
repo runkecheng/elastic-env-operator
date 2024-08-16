@@ -8,10 +8,6 @@ import (
 	"github.com/gogo/protobuf/proto"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	qav1alpha1 "github.com/wosai/elastic-env-operator/api/v1alpha1"
-	"github.com/wosai/elastic-env-operator/domain/entity"
-	"github.com/wosai/elastic-env-operator/domain/handler"
-	"github.com/wosai/elastic-env-operator/domain/util"
 	istio "istio.io/client-go/pkg/apis/networking/v1beta1"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -23,6 +19,12 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
+	cronhpav1beta1 "github.com/wosai/elastic-env-operator/api/cronhpa/v1beta1"
+	qav1alpha1 "github.com/wosai/elastic-env-operator/api/v1alpha1"
+	"github.com/wosai/elastic-env-operator/domain/entity"
+	"github.com/wosai/elastic-env-operator/domain/handler"
+	"github.com/wosai/elastic-env-operator/domain/util"
 )
 
 var _ = Describe("Controller", func() {
@@ -102,6 +104,169 @@ var _ = Describe("Controller", func() {
 		_ = k8sClient.Delete(ctx, service)
 
 		time.Sleep(time.Second)
+	})
+
+	Describe("CronHPA enabled", func() {
+		var cronHPA *cronhpav1beta1.CronHorizontalPodAutoscaler
+
+		BeforeEach(func() {
+			// 创建默认的application
+			sqbapplication = &qav1alpha1.SQBApplication{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: namespace,
+					Name:      applicationName,
+					Annotations: map[string]string{
+						entity.IstioInjectAnnotationKey: "false",
+					},
+				},
+				Spec: qav1alpha1.SQBApplicationSpec{
+					IngressSpec: qav1alpha1.IngressSpec{
+						Domains: []qav1alpha1.Domain{
+							{
+								Class: "nginx",
+								Host:  fmt.Sprintf("%s.iwosai.com", applicationName),
+							},
+							{
+								Class: "nginx-vpc",
+								Host:  fmt.Sprintf("%s.beta.iwosai.com", applicationName),
+							},
+						},
+					},
+					ServiceSpec: qav1alpha1.ServiceSpec{
+						Ports: []corev1.ServicePort{
+							{
+								Name:       "http-80",
+								Port:       int32(80),
+								TargetPort: intstr.FromInt(8080),
+								Protocol:   "TCP",
+							},
+						},
+					},
+				},
+			}
+			err = k8sClient.Create(ctx, sqbapplication)
+			Expect(err).NotTo(HaveOccurred())
+			sqbplane = &qav1alpha1.SQBPlane{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: namespace,
+					Name:      planeName,
+				},
+				Spec: qav1alpha1.SQBPlaneSpec{
+					Description: planeName,
+				},
+			}
+			err = k8sClient.Create(ctx, sqbplane)
+			Expect(err).NotTo(HaveOccurred())
+			sqbdeployment = &qav1alpha1.SQBDeployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: namespace,
+					Name:      deploymentName,
+					Labels: map[string]string{
+						entity.AppKey:   applicationName,
+						entity.PlaneKey: planeName,
+					},
+				},
+				Spec: qav1alpha1.SQBDeploymentSpec{
+					Selector: qav1alpha1.Selector{
+						App:   applicationName,
+						Plane: planeName,
+					},
+					DeploySpec: qav1alpha1.DeploySpec{
+						Image:    image,
+						Replicas: proto.Int32(1),
+					},
+				},
+			}
+			err = k8sClient.Create(ctx, sqbdeployment)
+			Expect(err).NotTo(HaveOccurred())
+
+			sqbdeployment = &qav1alpha1.SQBDeployment{}
+			testObjExistence(ctx, types.NamespacedName{Namespace: namespace, Name: deploymentName}, sqbdeployment)
+
+			sqbplane = &qav1alpha1.SQBPlane{}
+			testObjExistence(ctx, types.NamespacedName{Namespace: namespace, Name: planeName}, sqbplane)
+
+			deployment := &appv1.Deployment{}
+			testObjExistence(ctx, types.NamespacedName{Namespace: namespace, Name: deploymentName}, deployment)
+		})
+
+		AfterEach(func() {
+			Expect(k8sClient.Delete(ctx, sqbapplication)).Should(Succeed())
+			Expect(k8sClient.Delete(ctx, sqbdeployment)).Should(Succeed())
+			Expect(k8sClient.Delete(ctx, sqbplane)).Should(Succeed())
+			if cronHPA != nil {
+				Expect(k8sClient.Delete(ctx, cronHPA)).Should(Succeed())
+				cronHPA = nil
+			}
+			// 删除service,ingress,deployment
+			service := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: applicationName}}
+			_ = k8sClient.Delete(ctx, service)
+			ingress := &v1.Ingress{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: applicationName}}
+			_ = k8sClient.Delete(ctx, ingress)
+			deployment := &appv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: deploymentName}}
+			_ = k8sClient.Delete(ctx, deployment)
+			time.Sleep(time.Second)
+		})
+
+		It("replicas update should not take effect", func() {
+			deployment := &appv1.Deployment{}
+			testObjExistence(ctx, types.NamespacedName{Namespace: namespace, Name: deploymentName}, deployment)
+			Expect(deployment.Spec.Replicas).To(Equal(proto.Int32(1)))
+
+			By("Create CronHPA")
+			// Create CronHPA
+			cronHPA = &cronhpav1beta1.CronHorizontalPodAutoscaler{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: namespace,
+					Name:      deploymentName,
+				},
+				Spec: cronhpav1beta1.CronHorizontalPodAutoscalerSpec{
+					Jobs: []cronhpav1beta1.Job{
+						{
+							Name:       "每天中午10：12扩容",
+							Schedule:   "0 12 10 * * *",
+							TargetSize: 10,
+						},
+					},
+					ScaleTargetRef: cronhpav1beta1.ScaleTargetRef{
+						ApiVersion: "apps/v1",
+						Kind:       "Deployment",
+						Name:       deploymentName,
+					},
+				},
+			}
+			err = k8sClient.Create(ctx, cronHPA)
+			Expect(err).NotTo(HaveOccurred())
+
+			cronHPA = &cronhpav1beta1.CronHorizontalPodAutoscaler{}
+			testObjExistence(ctx, types.NamespacedName{Namespace: namespace, Name: deploymentName}, cronHPA)
+
+			sqbdeployment = &qav1alpha1.SQBDeployment{}
+			testObjExistence(ctx, types.NamespacedName{Namespace: namespace, Name: deploymentName}, sqbdeployment)
+			sqbdeployment.Spec.Replicas = proto.Int32(2)
+			Expect(k8sClient.Update(ctx, sqbdeployment)).Should(Succeed())
+
+			Consistently(func() int32 {
+				_ = k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: deploymentName}, deployment)
+				return *deployment.Spec.Replicas
+			}).Should(BeNumerically("==", 1))
+		})
+
+		It("replicas update should take effect without CronHPA", func() {
+			deployment := &appv1.Deployment{}
+			testObjExistence(ctx, types.NamespacedName{Namespace: namespace, Name: deploymentName}, deployment)
+			Expect(deployment.Spec.Replicas).To(Equal(proto.Int32(1)))
+
+			sqbdeployment = &qav1alpha1.SQBDeployment{}
+			testObjExistence(ctx, types.NamespacedName{Namespace: namespace, Name: deploymentName}, sqbdeployment)
+			sqbdeployment.Spec.Replicas = proto.Int32(2)
+			Expect(k8sClient.Update(ctx, sqbdeployment)).Should(Succeed())
+
+			Eventually(func() int32 {
+				_ = k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: deploymentName}, deployment)
+				return *deployment.Spec.Replicas
+			}).Should(BeNumerically("==", 2))
+		})
 	})
 
 	Describe("istio disabled", func() {
@@ -827,3 +992,9 @@ var _ = Describe("Controller", func() {
 
 	})
 })
+
+func testObjExistence(ctx context.Context, name types.NamespacedName, obj client.Object) {
+	Eventually(func() error {
+		return k8sClient.Get(ctx, name, obj)
+	}).WithPolling(500 * time.Millisecond).WithTimeout(5 * time.Second).Should(Succeed())
+}

@@ -22,22 +22,22 @@ import (
 	"time"
 
 	"github.com/go-logr/zapr"
-	"github.com/wosai/elastic-env-operator/domain/entity"
-	"github.com/wosai/elastic-env-operator/domain/handler"
-	"go.uber.org/zap"
-	istio "istio.io/client-go/pkg/apis/networking/v1beta1"
-	ctrl "sigs.k8s.io/controller-runtime"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
+	"go.uber.org/zap"
+	istio "istio.io/client-go/pkg/apis/networking/v1beta1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
+	"github.com/wosai/elastic-env-operator/api/cronhpa"
 	qav1alpha1 "github.com/wosai/elastic-env-operator/api/v1alpha1"
+	"github.com/wosai/elastic-env-operator/domain/entity"
+	"github.com/wosai/elastic-env-operator/domain/handler"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	// metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	// +kubebuilder:scaffold:imports
@@ -68,7 +68,10 @@ var _ = BeforeSuite(func() {
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths: []string{filepath.Join("..", "config", "crd", "bases")},
+		CRDDirectoryPaths: []string{
+			filepath.Join("..", "config", "crd", "bases"),
+			filepath.Join("..", "config", "crd", "cronhpav1beta1"),
+		},
 	}
 
 	var err error
@@ -84,7 +87,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	err = v1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
-	err = v1.AddToScheme(scheme.Scheme)
+	err = cronhpa.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	// +kubebuilder:scaffold:scheme
@@ -97,12 +100,7 @@ var _ = BeforeSuite(func() {
 	handler.SetK8sScheme(mgr.GetScheme())
 	handler.SetK8sLog(ctrl.Log.WithName("domain handler"))
 
-	err = (&SQBDeploymentReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("SQBDeployment"),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr)
-	Expect(err).ToNot(HaveOccurred())
+	Expect(NewSQBDeploymentReconciler(mgr)).ToNot(HaveOccurred())
 
 	err = (&SQBPlaneReconciler{
 		Client: mgr.GetClient(),

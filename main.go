@@ -18,24 +18,26 @@ package main
 
 import (
 	"flag"
-	qav1alpha1 "github.com/wosai/elastic-env-operator/api/v1alpha1"
-	"github.com/wosai/elastic-env-operator/controllers"
-	"github.com/wosai/elastic-env-operator/domain/entity"
-	"github.com/wosai/elastic-env-operator/domain/handler"
-	"k8s.io/apimachinery/pkg/runtime"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"os"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"time"
 
 	victoriametrics "github.com/VictoriaMetrics/operator/api/v1beta1"
 	prometheus "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	istio "istio.io/client-go/pkg/apis/networking/v1beta1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+
+	"github.com/wosai/elastic-env-operator/api/cronhpa"
+	qav1alpha1 "github.com/wosai/elastic-env-operator/api/v1alpha1"
+	"github.com/wosai/elastic-env-operator/controllers"
+	"github.com/wosai/elastic-env-operator/domain/entity"
+	"github.com/wosai/elastic-env-operator/domain/handler"
 )
 
 var (
@@ -50,6 +52,7 @@ func init() {
 	utilruntime.Must(istio.AddToScheme(scheme))
 	utilruntime.Must(prometheus.AddToScheme(scheme))
 	utilruntime.Must(victoriametrics.AddToScheme(scheme))
+	utilruntime.Must(cronhpa.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -81,11 +84,7 @@ func main() {
 	handler.SetK8sLog(ctrl.Log.WithName("domain handler"))
 	handler.SetK8sScheme(mgr.GetScheme())
 
-	if err = (&controllers.SQBDeploymentReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("SQBDeployment"),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
+	if err = controllers.NewSQBDeploymentReconciler(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SQBDeployment")
 		os.Exit(1)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -14,12 +15,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"math"
+	"k8s.io/client-go/tools/cache"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	qav1alpha1 "github.com/wosai/elastic-env-operator/api/v1alpha1"
+	"github.com/wosai/elastic-env-operator/domain/common"
 	"github.com/wosai/elastic-env-operator/domain/entity"
 	"github.com/wosai/elastic-env-operator/domain/util"
 )
@@ -30,11 +32,11 @@ type deploymentHandler struct {
 	req           ctrl.Request
 }
 
-func NewDeploymentHandler(sqbdeployment *qav1alpha1.SQBDeployment, ctx context.Context) *deploymentHandler {
+func NewDeploymentHandler(sqbdeployment *qav1alpha1.SQBDeployment, ctx context.Context) SQBHandler {
 	return &deploymentHandler{sqbdeployment: sqbdeployment, ctx: ctx}
 }
 
-func NewDeploymentHandlerWithReq(req ctrl.Request, ctx context.Context) *deploymentHandler {
+func NewDeploymentHandlerWithReq(req ctrl.Request, ctx context.Context) SQBReconciler {
 	return &deploymentHandler{req: req, ctx: ctx}
 }
 
@@ -98,7 +100,20 @@ func (h *deploymentHandler) CreateOrUpdate() error {
 	}
 
 	deployment.Labels = util.MergeStringMap(deployment.Labels, h.sqbdeployment.Labels)
+
+	// Memorize current value for reverting
+	curReplicas := deployment.Spec.Replicas
 	deployment.Spec.Replicas = deploy.Replicas
+
+	// FIX: inherit Replicas by checking existence of CronHPA (and HPA in the future)
+	if indexer, ok := h.ctx.Value(common.ContextKeyCronHPAIndexer).(cache.Indexer); ok {
+		cronHPAs, indexErr := indexer.ByIndex(common.CronHPAIndexByRef, common.BuildRefKey(deployment))
+		if indexErr == nil && len(cronHPAs) > 0 {
+			// TODO: shall we check if it is activated? This would be complicated
+			deployment.Spec.Replicas = curReplicas
+		}
+	}
+
 	// 从apps/v1beta2开始，deployment的selector是不可变的。兼容线上配置，线上存量的label.app=appname+ "-ack"
 	if deployment.Spec.Selector == nil {
 		deployment.Spec.Selector = &metav1.LabelSelector{
