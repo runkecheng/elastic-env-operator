@@ -56,6 +56,7 @@ jobs:
       run: |
         mkdir -p combined_crd
         cat config/crd/bases/*.yaml > combined_crd/combined_crd.yaml
+        make kustomize-build
     - name: Upload CRD
       uses: actions/upload-release-asset@v1.0.2
       env:
@@ -64,4 +65,13 @@ jobs:
         upload_url: ${{ steps.get_release.outputs.upload_url }}
         asset_path: combined_crd/combined_crd.yaml
         asset_name: crd.yaml
+        asset_content_type: application/yaml
+    - name: Upload deploy.yaml
+      uses: actions/upload-release-asset@v1.0.2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.get_release.outputs.upload_url }}
+        asset_path: /tmp/deploy.yaml
+        asset_name: deploy.yaml
         asset_content_type: application/yaml
