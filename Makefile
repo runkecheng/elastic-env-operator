@@ -48,7 +48,7 @@ deploy: manifests kustomize
 # 取消了自动生成ClusterRole rbac:roleName=manager-role
 # 取消自动生成webhook
 manifests: controller-gen
-	$(CONTROLLER_GEN) crd:crdVersions="v1" paths="./..." output:crd:artifacts:config=config/crd/bases
+	$(CONTROLLER_GEN) crd:crdVersions="v1" paths="./..." output:crd:artifacts:config=config/crd/bases rbac:roleName=manager-role 
 
 # Run go fmt against code
 fmt:
@@ -60,7 +60,7 @@ vet:
 
 # Generate code
 generate: controller-gen
-	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
+	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..." rbac:roleName=manager-role 
 
 # Build the docker image
 docker-build: generate fmt vet manifests #test
@@ -96,7 +96,7 @@ CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen-$(CONTROLLER_TOOLS_VERSION)
 ENVTEST ?= $(LOCALBIN)/setup-envtest-$(ENVTEST_VERSION)
 
 ## Tool Versions
-KUSTOMIZE_VERSION ?= v3.5.4
+KUSTOMIZE_VERSION ?= v5.4.3
 CONTROLLER_TOOLS_VERSION ?= v0.10.0
 ENVTEST_VERSION ?= release-0.14
 
@@ -104,6 +104,9 @@ ENVTEST_VERSION ?= release-0.14
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
 $(KUSTOMIZE): $(LOCALBIN)
 	$(call go-install-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v5,$(KUSTOMIZE_VERSION))
+
+kustomize-build:
+	$(KUSTOMIZE) build config/default > ./deploy.yaml
 
 .PHONY: controller-gen
 controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.
