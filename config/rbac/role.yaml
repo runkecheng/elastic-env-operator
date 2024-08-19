@@ -1,4 +1,3 @@
-
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -7,24 +6,17 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - '*'
+  - autoscaling.alibabacloud.com
   resources:
-  - services
-  - deployments
-  - virtualservices
-  - destinationrules
-  - ingresses
-  - configmaps
+  - cronhorizontalpodautoscalers
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - qa.shouqianba.com
+  resources:
   - sqbapplications
-  - sqbdeployments
-  - sqbplanes
-  - persistentvolumeclaims
-  - customresourcedefinitions
-  - servicemonitors
-  - sqbapplications/status
-  - sqbdeployments/status
-  - sqbplanes/status
-  - vmservicescrapes
   verbs:
   - create
   - delete
@@ -33,4 +25,51 @@ rules:
   - patch
   - update
   - watch
-  - deletecollection
+- apiGroups:
+  - qa.shouqianba.com
+  resources:
+  - sqbapplications/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - qa.shouqianba.com
+  resources:
+  - sqbdeployments
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - qa.shouqianba.com
+  resources:
+  - sqbdeployments/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - qa.shouqianba.com
+  resources:
+  - sqbplanes
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - qa.shouqianba.com
+  resources:
+  - sqbplanes/status
+  verbs:
+  - get
+  - patch
+  - update
