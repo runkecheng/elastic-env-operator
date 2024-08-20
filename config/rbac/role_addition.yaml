@@ -1,0 +1,67 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role-addition
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - services
+  - persistentvolumeclaims
+  - configmaps
+  verbs:
+  - '*'
+- apiGroups:
+  - "networking.k8s.io"  
+  resources:
+  - ingresses
+  verbs:
+  - '*'
+- apiGroups:
+  - "coordination.k8s.io" 
+  resources:
+  - leases
+  verbs:
+  - '*'
+- apiGroups:
+  - apps  
+  resources:
+  - deployments
+  verbs:
+  - '*'
+- apiGroups:
+  - networking.istio.io
+  resources:
+  - virtualservices
+  - destinationrules
+  verbs:
+  - '*'
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - '*'
+- apiGroups:
+  - monitoring.coreos.com
+  resources:
+  - servicemonitors
+  verbs:
+  - '*'
+- apiGroups:
+  - qa.shouqianba.com
+  resources:
+  - sqbapplications
+  - sqbdeployments
+  - sqbplanes
+  - sqbapplications/status
+  - sqbdeployments/status
+  - sqbplanes/status
+  verbs:
+  - '*'
+- apiGroups:
+  - operator.victoriametrics.com
+  resources:
+  - vmservicescrapes
+  verbs:
+  - '*'
