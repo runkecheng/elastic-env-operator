@@ -105,8 +105,8 @@ kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
 $(KUSTOMIZE): $(LOCALBIN)
 	$(call go-install-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v5,$(KUSTOMIZE_VERSION))
 
-kustomize-build:
-	$(KUSTOMIZE) build config/default > ./deploy.yaml
+kustomize-build-rbac:
+	$(KUSTOMIZE) build config/release-rbac  2>/dev/null > ./rbac.yaml
 
 .PHONY: controller-gen
 controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.

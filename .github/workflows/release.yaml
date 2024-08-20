@@ -56,6 +56,8 @@ jobs:
       run: |
         mkdir -p combined_crd
         cat config/crd/bases/*.yaml > combined_crd/combined_crd.yaml
+        mkdir -p kustomize
+        touch kustomize/deploy.yaml
     - name: Upload CRD
       uses: actions/upload-release-asset@v1.0.2
       env:
@@ -64,4 +66,20 @@ jobs:
         upload_url: ${{ steps.get_release.outputs.upload_url }}
         asset_path: combined_crd/combined_crd.yaml
         asset_name: crd.yaml
+        asset_content_type: application/yaml
+    - name: 'Kustomize Build'
+      uses: karancode/kustomize-github-action@master
+      with:
+        kustomize_version: '5.4.3'
+        kustomize_build_dir: 'config/release-rbac'
+        kustomize_output_file: "kustomize/rbac.yaml"
+        token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Upload rbac.yaml
+      uses: actions/upload-release-asset@v1.0.2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.get_release.outputs.upload_url }}
+        asset_path: kustomize/rbac.yaml
+        asset_name: rbac.yaml
         asset_content_type: application/yaml
