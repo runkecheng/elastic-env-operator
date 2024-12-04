@@ -20,7 +20,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
 // log is for logging in this package.
@@ -37,7 +36,7 @@ func (r *SQBDeployment) SetupWebhookWithManager(mgr ctrl.Manager) error {
 // TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
 // +kubebuilder:webhook:verbs=update,path=/validate-qa-shouqianba-com-v1alpha1-sqbdeployment,mutating=false,failurePolicy=fail,groups=qa.shouqianba.com,resources=sqbdeployments,versions=v1alpha1,name=vsqbdeployment.kb.io
 
-var _ webhook.Validator = &SQBDeployment{}
+//var _ webhook.Validator = &SQBDeployment{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (r *SQBDeployment) ValidateCreate() error {
