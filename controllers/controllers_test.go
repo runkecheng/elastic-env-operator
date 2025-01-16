@@ -8,7 +8,6 @@ import (
 	"github.com/gogo/protobuf/proto"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	istio "istio.io/client-go/pkg/apis/networking/v1beta1"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/api/networking/v1"
@@ -738,10 +737,6 @@ var _ = Describe("Controller", func() {
 			_ = k8sClient.Delete(ctx, service)
 			ingress := &v1.Ingress{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: applicationName}}
 			_ = k8sClient.Delete(ctx, ingress)
-			virtualservice := &istio.VirtualService{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: applicationName}}
-			_ = k8sClient.Delete(ctx, virtualservice)
-			destinationrule := &istio.DestinationRule{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: applicationName}}
-			_ = k8sClient.Delete(ctx, destinationrule)
 			_ = k8sClient.DeleteAllOf(ctx, &appv1.Deployment{}, &client.DeleteAllOfOptions{
 				ListOptions: client.ListOptions{
 					LabelSelector: labels.SelectorFromSet(map[string]string{entity.AppKey: applicationName}),
@@ -749,28 +744,6 @@ var _ = Describe("Controller", func() {
 				},
 			})
 			time.Sleep(time.Second)
-		})
-
-		It("virtualservice created,destinationrule created", func() {
-			_, err := controllerutil.CreateOrUpdate(ctx, k8sClient, sqbapplication, func() error {
-				sqbapplication.Annotations[entity.IstioInjectAnnotationKey] = "true"
-				return nil
-			})
-			Expect(err).NotTo(HaveOccurred())
-			time.Sleep(time.Second)
-			virtualservice := &istio.VirtualService{}
-			err = k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: applicationName}, virtualservice)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(len(virtualservice.Spec.Hosts)).To(Equal(3))
-			Expect(virtualservice.Spec.Gateways).To(Equal([]string{"istio-system/ingressgateway", "mesh"}))
-			Expect(virtualservice.Spec.Http[0].Route[0].Destination.Host).To(Equal(applicationName))
-			Expect(virtualservice.Spec.Http[0].Route[0].Destination.Subset).To(Equal(deploymentName))
-			destinationrule := &istio.DestinationRule{}
-			err = k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: applicationName}, destinationrule)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(destinationrule.Spec.Host).To(Equal(applicationName))
-			Expect(destinationrule.Spec.Subsets[0].Name).To(Equal(deploymentName))
-			Expect(destinationrule.Spec.Subsets[0].Labels[entity.PlaneKey]).To(Equal(planeName))
 		})
 
 		It("ingress open", func() {
@@ -802,12 +775,6 @@ var _ = Describe("Controller", func() {
 			err = k8sClient.Update(ctx, sqbdeployment)
 			Expect(err).NotTo(HaveOccurred())
 			time.Sleep(time.Second)
-			// 新增了virtualservice
-			virtualservice := &istio.VirtualService{}
-			err = k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: deploymentName}, virtualservice)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(virtualservice.Spec.Hosts).To(Equal([]string{deploymentName + ".iwosai.com"}))
-			Expect(virtualservice.Spec.Http[0].Headers.Request.Set[entity.XEnvFlag]).To(Equal(planeName))
 			// 断言ingress
 			ingress := &v1.Ingress{}
 			err = k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: applicationName + "-" + handler.SpecialVirtualServiceIngress(sqbdeployment)}, ingress)
@@ -822,25 +789,6 @@ var _ = Describe("Controller", func() {
 			time.Sleep(time.Second)
 			err = k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: applicationName + "-" + handler.SpecialVirtualServiceIngress(sqbdeployment)}, ingress)
 			Expect(len(ingress.Spec.Rules)).To(Equal(1))
-		})
-
-		It("pass virtualservice annotation,destinationrule annotation", func() {
-			_, err := controllerutil.CreateOrUpdate(ctx, k8sClient, sqbapplication, func() error {
-				sqbapplication.Annotations[entity.IstioInjectAnnotationKey] = "true"
-				sqbapplication.Annotations[entity.VirtualServiceAnnotationKey] = `{"type":"virtualservice"}`
-				sqbapplication.Annotations[entity.DestinationRuleAnnotationKey] = `{"type":"destinationrule"}`
-				return nil
-			})
-			Expect(err).NotTo(HaveOccurred())
-			time.Sleep(time.Second)
-			virtualservice := &istio.VirtualService{}
-			err = k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: applicationName}, virtualservice)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(virtualservice.Annotations["type"]).To(Equal("virtualservice"))
-			destinationrule := &istio.DestinationRule{}
-			err = k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: applicationName}, destinationrule)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(destinationrule.Annotations["type"]).To(Equal("destinationrule"))
 		})
 
 		It("multi subpaths,multi plane", func() {
@@ -878,40 +826,6 @@ var _ = Describe("Controller", func() {
 			err = k8sClient.Create(ctx, sqbdeployment2)
 			Expect(err).NotTo(HaveOccurred())
 			time.Sleep(time.Second)
-			virtualservice := &istio.VirtualService{}
-			err = k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: applicationName}, virtualservice)
-			Expect(err).NotTo(HaveOccurred())
-			// route顺序为特性环境+subpath，特性环境，基础环境+subpath，基础环境
-			httproute0 := virtualservice.Spec.Http[0]
-			// match顺序为header,query,sourcelabel
-			Expect(len(httproute0.Match)).To(Equal(3))
-			Expect(httproute0.Match[0].Headers[entity.XEnvFlag].GetExact()).To(Equal("test"))
-			Expect(httproute0.Match[0].Uri.GetPrefix()).To(Equal("/v2"))
-			Expect(httproute0.Match[1].QueryParams[entity.XEnvFlag].GetExact()).To(Equal("test"))
-			Expect(httproute0.Match[1].Uri.GetPrefix()).To(Equal("/v2"))
-			Expect(httproute0.Match[2].SourceLabels[entity.PlaneKey]).To(Equal("test"))
-			Expect(httproute0.Match[2].Uri.GetPrefix()).To(Equal("/v2"))
-			Expect(httproute0.Route[0].Destination.Host).To(Equal("version2"))
-			Expect(httproute0.Route[0].Destination.Subset).To(Equal(util.GetSubsetName("version2", "test")))
-
-			httproute1 := virtualservice.Spec.Http[1]
-			Expect(len(httproute1.Match)).To(Equal(3))
-			Expect(httproute1.Match[0].Headers[entity.XEnvFlag].GetExact()).To(Equal("test"))
-			Expect(httproute1.Match[1].QueryParams[entity.XEnvFlag].GetExact()).To(Equal("test"))
-			Expect(httproute1.Match[2].SourceLabels[entity.PlaneKey]).To(Equal("test"))
-			Expect(httproute1.Route[0].Destination.Host).To(Equal(applicationName))
-			Expect(httproute1.Route[0].Destination.Subset).To(Equal(util.GetSubsetName(applicationName, "test")))
-
-			httproute2 := virtualservice.Spec.Http[2]
-			Expect(len(httproute2.Match)).To(Equal(1))
-			Expect(httproute2.Match[0].Uri.GetPrefix()).To(Equal("/v2"))
-			Expect(httproute2.Route[0].Destination.Host).To(Equal("version2"))
-			Expect(httproute2.Route[0].Destination.Subset).To(Equal(util.GetSubsetName("version2", planeName)))
-
-			httproute3 := virtualservice.Spec.Http[3]
-			Expect(len(httproute3.Match)).To(Equal(0))
-			Expect(httproute3.Route[0].Destination.Host).To(Equal(applicationName))
-			Expect(httproute3.Route[0].Destination.Subset).To(Equal(deploymentName))
 			// sqbapplication的status正确
 			err = k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: applicationName}, sqbapplication)
 			Expect(err).NotTo(HaveOccurred())
@@ -940,12 +854,6 @@ var _ = Describe("Controller", func() {
 			Expect(len(service.Spec.Ports)).To(Equal(1))
 			Expect(service.Spec.Ports[0].Name).To(Equal("tcp-3306"))
 			Expect(service.Spec.Ports[0].Port).To(Equal(int32(3306)))
-
-			virtualservice := &istio.VirtualService{}
-			err = k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: applicationName}, virtualservice)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(len(virtualservice.Spec.Http)).To(Equal(1))
-			Expect(len(virtualservice.Spec.Tcp)).To(Equal(1))
 		})
 
 		It("delete sqbapplication with password", func() {
@@ -956,12 +864,6 @@ var _ = Describe("Controller", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 			time.Sleep(time.Second)
-			virtualservice := &istio.VirtualService{}
-			err = k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: applicationName}, virtualservice)
-			Expect(err).To(HaveOccurred())
-			destinationrule := &istio.DestinationRule{}
-			err = k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: applicationName}, destinationrule)
-			Expect(err).To(HaveOccurred())
 		})
 
 		It("istio open then close", func() {

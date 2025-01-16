@@ -69,7 +69,6 @@ func (h *sqbDeploymentHandler) Operate(obj runtimeObj) error {
 		//NewGrayServiceHandler(in, h.ctx),
 		//NewGrayVMServiceScrapeHandler(in, h.ctx),
 		NewSqbdeploymentIngressHandler(in, h.ctx),
-		NewSpecialVirtualServiceHandler(in, h.ctx),
 	}
 
 	for _, handler := range handlers {
